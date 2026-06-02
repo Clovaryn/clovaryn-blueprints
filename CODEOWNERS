@@ -1,0 +1,7 @@
+# Official packages and repository automation require Clovaryn maintainer review.
+/packages/official/** @clovaryn/maintainers
+/.github/** @clovaryn/maintainers
+
+# Community packages require maintainer review before merge.
+/packages/community/** @clovaryn/maintainers
+
