@@ -140,14 +140,12 @@ def _looks_binary(data: bytes) -> bool:
 
 def _discover_package_roots() -> list[Path]:
     if not PACKAGES_ROOT.exists():
-        raise ValidationError("packages/official does not exist")
+        return []
     roots: list[Path] = []
     for package_name_dir in sorted(path for path in PACKAGES_ROOT.iterdir() if path.is_dir()):
         for version_dir in sorted(path for path in package_name_dir.iterdir() if path.is_dir()):
             if (version_dir / "clovaryn.package.toml").exists():
                 roots.append(version_dir)
-    if not roots:
-        raise ValidationError("No official packages were discovered")
     return roots
 
 
