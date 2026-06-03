@@ -1,0 +1,10 @@
+rules:
+  - id: aws.ecs.private_network.internal_only
+    severity: blocker
+    description: Internal-only ECS services must use private subnets, no public task IPs, and an internal ALB.
+    checks:
+      - ecs_service.assign_public_ip must be false
+      - ecs_service.subnets must use private_subnet_ids
+      - alb.internal must be true
+      - alb.subnets must use private_subnet_ids
+

@@ -1,0 +1,23 @@
+output "alb_dns_name" {
+  value = aws_lb.service.dns_name
+}
+
+output "ecs_service_name" {
+  value = aws_ecs_service.service.name
+}
+
+output "ecs_task_definition_arn" {
+  value = aws_ecs_task_definition.service.arn
+}
+
+output "security_group_ids" {
+  value = {
+    alb         = aws_security_group.alb.id
+    ecs_service = aws_security_group.ecs_service.id
+  }
+}
+
+output "log_group_name" {
+  value = aws_cloudwatch_log_group.service.name
+}
+

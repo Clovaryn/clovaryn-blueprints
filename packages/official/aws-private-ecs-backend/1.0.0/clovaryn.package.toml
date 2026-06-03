@@ -1,0 +1,32 @@
+[package]
+namespace = "clovaryn"
+name = "aws-private-ecs-backend"
+version = "1.0.0"
+display_name = "AWS Private ECS Backend"
+provider = "aws"
+description = "Private AWS ECS Fargate backend behind an internal Application Load Balancer."
+
+[compatibility]
+schema = "clovaryn.package.v1"
+compiler_min_version = "0.1.0"
+
+[[families]]
+id = "aws-private-ecs-backend"
+description = "AWS ECS Fargate backend architecture family."
+
+[[variants]]
+id = "private-fargate-internal-alb"
+family_id = "aws-private-ecs-backend"
+provider = "aws"
+exposure = "internal_only"
+template_dir = "templates/terraform"
+
+[[rules]]
+id = "aws.ecs.private_network.internal_only"
+severity = "blocker"
+description = "Internal-only ECS workloads must use private subnets, no public task IPs, an internal ALB, and no direct public ECS security group ingress."
+
+[bindings]
+default_family_id = "aws-private-ecs-backend"
+default_variant_id = "private-fargate-internal-alb"
+
