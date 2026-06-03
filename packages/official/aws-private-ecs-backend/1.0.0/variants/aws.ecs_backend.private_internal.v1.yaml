@@ -1,0 +1,9 @@
+id: private-fargate-internal-alb
+family_id: aws-private-ecs-backend
+provider: aws
+exposure: internal_only
+template_dir: templates/terraform
+description: ECS Fargate service behind an internal Application Load Balancer.
+required_rules:
+  - aws.ecs.private_network.internal_only
+

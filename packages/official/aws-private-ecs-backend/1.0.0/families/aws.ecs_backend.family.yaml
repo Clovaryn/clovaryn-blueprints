@@ -1,0 +1,7 @@
+id: aws-private-ecs-backend
+provider: aws
+display_name: AWS Private ECS Backend
+description: AWS ECS Fargate backend architecture family for internal-only services.
+supported_exposures:
+  - internal_only
+

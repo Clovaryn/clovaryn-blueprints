@@ -1,0 +1,6 @@
+aws_region = {{ terraform.aws_region | hcl }}
+vpc_id = {{ terraform.variables.vpc_id.default | hcl }}
+private_subnet_ids = {{ terraform.variables.private_subnet_ids.default | hcl }}
+allowed_internal_cidr_blocks = {{ terraform.variables.allowed_internal_cidr_blocks.default | hcl }}
+ecs_cluster_arn = ""
+

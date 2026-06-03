@@ -1,0 +1,9 @@
+rules:
+  - id: aws.ecs.security.no_direct_public_ingress
+    severity: blocker
+    description: ECS service security groups must not allow direct public inbound access.
+    checks:
+      - ecs_service security group ingress must come from the ALB security group
+      - ecs_service security group ingress must not use 0.0.0.0/0
+      - ecs_service security group ingress must not use ::/0
+

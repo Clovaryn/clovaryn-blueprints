@@ -1,0 +1,20 @@
+variable "aws_region" {
+  type = string
+}
+
+variable "vpc_id" {
+  type = string
+}
+
+variable "private_subnet_ids" {
+  type = list(string)
+}
+
+variable "allowed_internal_cidr_blocks" {
+  type = list(string)
+}
+
+variable "ecs_cluster_arn" {
+  type = string
+}
+
