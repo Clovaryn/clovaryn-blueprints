@@ -1,0 +1,35 @@
+name: PR Validate
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request content
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install parser-only validation dependencies
+        run: python -m pip install -r tools/requirements-pr-validate.txt
+
+      - name: Run validator self-tests
+        run: python tools/validate_blueprints.py --self-test
+
+      - name: Validate blueprint packages
+        run: python tools/validate_blueprints.py
