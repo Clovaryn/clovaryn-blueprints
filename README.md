@@ -19,6 +19,8 @@ Blueprint authors create and maintain:
 
 Terraform templates are source templates only. Do not commit rendered `.tf` files or rendered `terraform.tfvars` files.
 
+OpenTofu support is compatibility-mode support. Packages that declare OpenTofu support still provide Terraform-language `.tf.j2` templates. The compiler selects the OpenTofu target, emits files under `generated/opentofu`, and provides `tofu` command guidance. Do not add `.tofu` templates or a separate `templates/opentofu` directory unless Clovaryn introduces a native OpenTofu template language later.
+
 ## Official And Community Packages
 
 Official packages live under `packages/official` and are maintained by Clovaryn maintainers.

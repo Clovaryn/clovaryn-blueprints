@@ -30,6 +30,16 @@
         }
       }
     },
+    "infra": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "iac_target": {
+          "type": "string",
+          "enum": ["terraform", "opentofu"]
+        }
+      }
+    },
     "inputs": {
       "type": "object",
       "required": ["service", "network"],
