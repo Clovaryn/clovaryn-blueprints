@@ -20,3 +20,4 @@ See `schemas/intent.schema.json` and `examples/dev.intent.toml` for the supporte
 
 Terraform output is rendered from source templates under `templates/terraform`. Only `.tf.j2` templates and public-safe helper templates are committed here.
 
+OpenTofu support is compatibility-mode support for this package. The package still provides Terraform-language `.tf.j2` templates under `templates/terraform`; the compiler selects the OpenTofu target, emits files under `generated/opentofu`, and provides `tofu` command guidance. This package does not provide `.tofu` templates or a separate `templates/opentofu` directory.

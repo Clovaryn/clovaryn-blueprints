@@ -25,6 +25,8 @@ PACKAGES_ROOT = REPO_ROOT / "packages" / "official"
 KEBAB_CASE_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 PUBLIC_CIDRS = {"0.0.0.0/0", "::/0"}
+SUPPORTED_TEMPLATE_LANGUAGES = {"terraform"}
+SUPPORTED_IAC_TARGETS = {"terraform", "opentofu"}
 
 MAX_PACKAGE_BYTES = 5 * 1024 * 1024
 MAX_FILE_COUNT = 500
@@ -207,6 +209,49 @@ def _validate_package_file_safety(package_root: Path) -> list[Path]:
     return files
 
 
+def _validate_variant_target_metadata(
+    package_root: Path,
+    variant: dict[str, Any],
+    yaml_variant: dict[str, Any] | None = None,
+) -> None:
+    variant_id = variant.get("id", "<unknown>")
+    template_dir = variant.get("template_dir")
+    template_language = variant.get("template_language")
+    supported_iac_targets = variant.get("supported_iac_targets")
+
+    if not isinstance(template_dir, str) or not template_dir:
+        raise ValidationError(f"Variant template_dir must be a non-empty string: {_rel(package_root)}:{variant_id}")
+    if "opentofu" in (supported_iac_targets if isinstance(supported_iac_targets, list) else []):
+        if template_language != "terraform":
+            raise ValidationError(
+                f"Variant declaring OpenTofu support must use template_language = terraform: {_rel(package_root)}:{variant_id}"
+            )
+    if template_language not in SUPPORTED_TEMPLATE_LANGUAGES:
+        raise ValidationError(
+            f"Variant template_language must be one of {sorted(SUPPORTED_TEMPLATE_LANGUAGES)}: "
+            f"{_rel(package_root)}:{variant_id}"
+        )
+    if template_language == "terraform" and template_dir != "templates/terraform":
+        raise ValidationError(f"Terraform-language variants must use templates/terraform: {_rel(package_root)}:{variant_id}")
+    if not isinstance(supported_iac_targets, list) or not supported_iac_targets:
+        raise ValidationError(f"Variant supported_iac_targets must be a non-empty list: {_rel(package_root)}:{variant_id}")
+    invalid_targets = sorted(
+        str(target) for target in supported_iac_targets if not isinstance(target, str) or target not in SUPPORTED_IAC_TARGETS
+    )
+    if invalid_targets:
+        raise ValidationError(
+            f"Variant supported_iac_targets must use canonical values {sorted(SUPPORTED_IAC_TARGETS)}: "
+            f"{_rel(package_root)}:{variant_id}"
+        )
+    if len(set(supported_iac_targets)) != len(supported_iac_targets):
+        raise ValidationError(f"Variant supported_iac_targets contains duplicates: {_rel(package_root)}:{variant_id}")
+
+    if yaml_variant is not None:
+        for key in ("template_language", "supported_iac_targets"):
+            if yaml_variant.get(key) != variant.get(key):
+                raise ValidationError(f"Variant YAML must match manifest {key}: {_rel(package_root)}:{variant_id}")
+
+
 def _validate_package_metadata(package_root: Path) -> dict[str, Any]:
     package_name = package_root.parent.name
     version = package_root.name
@@ -242,11 +287,14 @@ def _validate_package_metadata(package_root: Path) -> dict[str, Any]:
         for loaded in (_load_yaml(path) for path in sorted((package_root / "families").glob("*.yaml")))
         if isinstance(loaded, dict)
     }
-    yaml_variant_ids = {
-        loaded.get("id")
-        for loaded in (_load_yaml(path) for path in sorted((package_root / "variants").glob("*.yaml")))
-        if isinstance(loaded, dict)
-    }
+    yaml_variants_by_id: dict[str, dict[str, Any]] = {}
+    for path in sorted((package_root / "variants").glob("*.yaml")):
+        loaded = _load_yaml(path)
+        if not isinstance(loaded, dict):
+            raise ValidationError(f"Variant YAML must be an object: {_rel(path)}")
+        if loaded.get("id"):
+            yaml_variants_by_id[loaded["id"]] = loaded
+    yaml_variant_ids = set(yaml_variants_by_id)
     yaml_rule_ids: set[str] = set()
     for path in sorted((package_root / "rules").glob("*.yaml")):
         loaded = _load_yaml(path)
@@ -267,6 +315,7 @@ def _validate_package_metadata(package_root: Path) -> dict[str, Any]:
         template_dir = package_root / variant.get("template_dir", "")
         if not template_dir.exists() or not template_dir.is_dir():
             raise ValidationError(f"Variant template_dir does not exist: {_rel(package_root)}")
+        _validate_variant_target_metadata(package_root, variant, yaml_variants_by_id.get(variant.get("id")))
 
     return manifest
 
@@ -488,6 +537,38 @@ def run_self_tests() -> None:
     assert _is_allowed_template_source(Path("terraform.tfvars.j2"))
     assert not _is_allowed_template_source(Path("helper.j2"))
     assert _looks_binary(b"abc\x00def")
+
+    valid_variant = {
+        "id": "variant",
+        "template_dir": "templates/terraform",
+        "template_language": "terraform",
+        "supported_iac_targets": ["terraform", "opentofu"],
+    }
+    _validate_variant_target_metadata(REPO_ROOT, valid_variant, dict(valid_variant))
+    expect_error(
+        lambda: _validate_variant_target_metadata(
+            REPO_ROOT,
+            {
+                "id": "variant",
+                "template_dir": "templates/terraform",
+                "template_language": "terraform",
+                "supported_iac_targets": ["tf"],
+            },
+        ),
+        "target alias was not rejected in public package metadata",
+    )
+    expect_error(
+        lambda: _validate_variant_target_metadata(
+            REPO_ROOT,
+            {
+                "id": "variant",
+                "template_dir": "templates/pulumi",
+                "template_language": "pulumi",
+                "supported_iac_targets": ["opentofu"],
+            },
+        ),
+        "OpenTofu support with non-Terraform template language was not rejected",
+    )
 
     unsafe_snippets = [
         {"ecs.tf": 'resource "aws_ecs_service" "service" { assign_public_ip = true }'},

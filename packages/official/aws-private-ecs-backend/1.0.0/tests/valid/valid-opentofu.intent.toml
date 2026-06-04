@@ -1,0 +1,24 @@
+[project]
+name = "your-project-name"
+environment = "dev"
+
+[infra]
+iac_target = "opentofu"
+
+[packages]
+primary = ["clovaryn/aws-private-ecs-backend@1.0.0"]
+
+[inputs.service]
+name = "your-service-name"
+container_image = "123456789012.dkr.ecr.ca-central-1.amazonaws.com/your-container-image:1.0.0"
+container_port = 8080
+cpu = 256
+memory = 512
+desired_count = 1
+
+[inputs.network]
+exposure = "internal_only"
+vpc_id = "vpc-REPLACE_ME"
+private_subnet_ids = ["subnet-private-a", "subnet-private-b"]
+public_subnet_ids = []
+allowed_cidr_blocks = ["10.0.0.0/8"]

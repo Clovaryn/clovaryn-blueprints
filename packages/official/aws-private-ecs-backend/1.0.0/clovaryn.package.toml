@@ -20,6 +20,8 @@ family_id = "aws-private-ecs-backend"
 provider = "aws"
 exposure = "internal_only"
 template_dir = "templates/terraform"
+template_language = "terraform"
+supported_iac_targets = ["terraform", "opentofu"]
 
 [[rules]]
 id = "aws.ecs.private_network.internal_only"
