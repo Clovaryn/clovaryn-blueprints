@@ -77,6 +77,8 @@ FORBIDDEN_NAME_PATTERNS = (
     re.compile(r".*google-application-credentials.*\.json$"),
 )
 
+IGNORED_REPOSITORY_PARTS = {".clovaryn", ".pytest_cache", "__pycache__", "generated", "node_modules"}
+
 
 class ValidationError(RuntimeError):
     pass
@@ -157,6 +159,8 @@ def _validate_repository_file_safety() -> None:
     for path in sorted(REPO_ROOT.rglob("*")):
         rel_parts = path.relative_to(REPO_ROOT).parts
         if not rel_parts or rel_parts[0] == ".git":
+            continue
+        if any(part in IGNORED_REPOSITORY_PARTS for part in rel_parts):
             continue
         if path.is_symlink():
             raise ValidationError(f"Symlinks are not allowed: {_rel(path)}")

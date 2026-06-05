@@ -65,4 +65,4 @@ Examples must use public-safe placeholders such as `123456789012`, `ca-central-1
 
 ## Publishing Model
 
-Validated packages will be published to the Clovaryn registry by a deterministic publishing flow. RAG or LLM systems may recommend packages, but deterministic package metadata, rules, compiler behavior, and validators remain the source of truth.
+Validated packages may be published to the Clovaryn registry by Clovaryn's internal deterministic registry pipeline.
