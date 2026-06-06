@@ -1,0 +1,19 @@
+[project]
+name = "your-project-name"
+environment = "prod"
+
+[packages]
+primary = ["clovaryn/aws-s3-private-bucket@1.0.0"]
+
+[infra]
+iac_target = "terraform"
+
+[inputs.storage]
+aws_region = "ca-central-1"
+bucket_name = "your-project-prod-private-bucket"
+versioning_enabled = true
+encryption_enabled = true
+block_public_access = true
+force_destroy = false
+tags = { Environment = "prod", ManagedBy = "clovaryn" }
+

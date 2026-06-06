@@ -1,0 +1,16 @@
+[project]
+name = "your-project-name"
+environment = "dev"
+
+[packages]
+primary = ["clovaryn/aws-s3-private-bucket@1.0.0"]
+
+[inputs.storage]
+aws_region = "ca-central-1"
+bucket_name = "your-project-dev-private-bucket"
+versioning_enabled = true
+encryption_enabled = true
+block_public_access = false
+force_destroy = false
+tags = { Environment = "dev", ManagedBy = "clovaryn" }
+

@@ -1,0 +1,17 @@
+rules:
+  - id: aws.s3.private_bucket.block_public_access
+    severity: blocker
+    description: Private S3 buckets must keep all public access block settings enabled.
+    checks:
+      - block_public_acls must be true
+      - block_public_policy must be true
+      - ignore_public_acls must be true
+      - restrict_public_buckets must be true
+      - public ACLs and public bucket policies are forbidden
+  - id: aws.s3.private_bucket.encryption_required
+    severity: blocker
+    description: Private S3 buckets must use server-side encryption.
+    checks:
+      - aws_s3_bucket_server_side_encryption_configuration must be present
+      - encryption_enabled must be true
+

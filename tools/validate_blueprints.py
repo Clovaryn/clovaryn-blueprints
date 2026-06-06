@@ -352,6 +352,16 @@ def _validate_private_ecs_intent(intent: dict[str, Any], path: Path) -> list[str
     return [f"{_rel(path)}: {issue}" for issue in issues]
 
 
+def _validate_private_s3_intent(intent: dict[str, Any], path: Path) -> list[str]:
+    issues: list[str] = []
+    storage = intent.get("inputs", {}).get("storage", {})
+    if storage.get("block_public_access") is not True:
+        issues.append("storage.block_public_access must be true")
+    if storage.get("encryption_enabled") is not True:
+        issues.append("storage.encryption_enabled must be true")
+    return [f"{_rel(path)}: {issue}" for issue in issues]
+
+
 def _package_declares_ecs_backend(manifest: dict[str, Any]) -> bool:
     package = manifest.get("package", {})
     if package.get("name") == "aws-private-ecs-backend":
@@ -360,9 +370,25 @@ def _package_declares_ecs_backend(manifest: dict[str, Any]) -> bool:
     return any("ecs" in family_id and "backend" in family_id for family_id in family_ids)
 
 
+def _package_declares_s3_private_bucket(manifest: dict[str, Any]) -> bool:
+    package = manifest.get("package", {})
+    if package.get("name") == "aws-s3-private-bucket":
+        return True
+    family_ids = {family.get("id", "") for family in manifest.get("families", [])}
+    return any("s3" in family_id and "bucket" in family_id for family_id in family_ids)
+
+
+def _validate_package_intent(intent: dict[str, Any], path: Path, manifest: dict[str, Any]) -> list[str]:
+    issues: list[str] = []
+    if _package_declares_ecs_backend(manifest):
+        issues.extend(_validate_private_ecs_intent(intent, path))
+    if _package_declares_s3_private_bucket(manifest):
+        issues.extend(_validate_private_s3_intent(intent, path))
+    return issues
+
+
 def _validate_intents(package_root: Path, schema: dict[str, Any], manifest: dict[str, Any]) -> None:
     validator = Draft202012Validator(schema)
-    ecs_package = _package_declares_ecs_backend(manifest)
 
     valid_intents = sorted((package_root / "examples").glob("*.intent.toml"))
     valid_intents.extend(sorted((package_root / "tests" / "valid").glob("*.intent.toml")))
@@ -374,21 +400,20 @@ def _validate_intents(package_root: Path, schema: dict[str, Any], manifest: dict
         errors = sorted(validator.iter_errors(intent), key=lambda err: list(err.path))
         if errors:
             raise ValidationError(f"Intent schema validation failed for {_rel(path)}: {errors[0].message}")
-        if ecs_package:
-            issues = _validate_private_ecs_intent(intent, path)
-            if issues:
-                raise ValidationError("; ".join(issues))
+        issues = _validate_package_intent(intent, path, manifest)
+        if issues:
+            raise ValidationError("; ".join(issues))
 
     invalid_intents = sorted((package_root / "tests" / "invalid").glob("*.intent.toml"))
     for path in invalid_intents:
         intent = _load_intent(path)
         schema_errors = list(validator.iter_errors(intent))
-        package_issues = _validate_private_ecs_intent(intent, path) if ecs_package else []
+        package_issues = _validate_package_intent(intent, path, manifest)
         if not schema_errors and not package_issues:
             raise ValidationError(f"Invalid intent unexpectedly passed validation: {_rel(path)}")
 
 
-def _safe_render_context(intent: dict[str, Any]) -> dict[str, Any]:
+def _safe_ecs_render_context(intent: dict[str, Any]) -> dict[str, Any]:
     inputs = intent.get("inputs", {})
     service = dict(inputs.get("service", {}))
     service.setdefault("health_check_path", "/")
@@ -415,6 +440,33 @@ def _safe_render_context(intent: dict[str, Any]) -> dict[str, Any]:
             },
         },
     }
+
+
+def _safe_s3_render_context(intent: dict[str, Any]) -> dict[str, Any]:
+    inputs = intent.get("inputs", {})
+    storage = dict(inputs.get("storage", {}))
+    storage.setdefault("tags", {})
+    return {
+        "storage": storage,
+        "terraform": {
+            "aws_region": storage.get("aws_region", "ca-central-1"),
+            "aws_provider_version": "~> 5.0",
+            "variables": {
+                "bucket_name": {"default": storage.get("bucket_name", "your-project-private-bucket")},
+                "versioning_enabled": {"default": storage.get("versioning_enabled", True)},
+                "encryption_enabled": {"default": storage.get("encryption_enabled", True)},
+                "block_public_access": {"default": storage.get("block_public_access", True)},
+                "force_destroy": {"default": storage.get("force_destroy", False)},
+                "tags": {"default": storage.get("tags", {})},
+            },
+        },
+    }
+
+
+def _safe_render_context(intent: dict[str, Any], manifest: dict[str, Any]) -> dict[str, Any]:
+    if _package_declares_s3_private_bucket(manifest):
+        return _safe_s3_render_context(intent)
+    return _safe_ecs_render_context(intent)
 
 
 def _render_templates(package_root: Path, manifest: dict[str, Any]) -> dict[str, str]:
@@ -445,7 +497,7 @@ def _render_templates(package_root: Path, manifest: dict[str, Any]) -> dict[str,
     valid_intents = sorted((package_root / "tests" / "valid").glob("*.intent.toml"))
     if not valid_intents:
         valid_intents = sorted((package_root / "examples").glob("*.intent.toml"))
-    context = _safe_render_context(_load_intent(valid_intents[0]))
+    context = _safe_render_context(_load_intent(valid_intents[0]), manifest)
 
     rendered: dict[str, str] = {}
     for template_path in templates:
@@ -455,10 +507,7 @@ def _render_templates(package_root: Path, manifest: dict[str, Any]) -> dict[str,
     return rendered
 
 
-def _scan_rendered_terraform(rendered: dict[str, str], package_root: Path) -> None:
-    terraform = "\n".join(content for name, content in sorted(rendered.items()) if name.endswith(".tf"))
-    if not terraform:
-        return
+def _scan_rendered_ecs_terraform(terraform: str) -> list[str]:
     failures: list[str] = []
     if re.search(r"assign_public_ip\s*=\s*true", terraform):
         failures.append("assign_public_ip = true is not allowed")
@@ -479,6 +528,52 @@ def _scan_rendered_terraform(rendered: dict[str, str], package_root: Path) -> No
     )
     if ecs_ingress_public:
         failures.append("direct public ECS ingress is not allowed")
+    return failures
+
+
+def _scan_rendered_s3_terraform(terraform: str) -> list[str]:
+    failures: list[str] = []
+    if 'resource "aws_s3_bucket_public_access_block"' not in terraform:
+        failures.append("aws_s3_bucket_public_access_block is missing")
+    if 'resource "aws_s3_bucket_server_side_encryption_configuration"' not in terraform:
+        failures.append("aws_s3_bucket_server_side_encryption_configuration is missing")
+    for flag in (
+        "block_public_acls",
+        "block_public_policy",
+        "ignore_public_acls",
+        "restrict_public_buckets",
+    ):
+        if not re.search(rf"\b{flag}\s*=\s*(true|var\.block_public_access)\b", terraform):
+            failures.append(f"{flag} must be enabled")
+    if "var.block_public_access == true" not in terraform:
+        failures.append("block_public_access variable must validate true")
+    if "var.encryption_enabled == true" not in terraform:
+        failures.append("encryption_enabled variable must validate true")
+    if re.search(r'\bacl\s*=\s*"public-(read|read-write)"', terraform):
+        failures.append("public S3 ACLs are not allowed")
+    if 'resource "aws_s3_bucket_acl"' in terraform:
+        failures.append("aws_s3_bucket_acl resources are not allowed")
+    if "aws_s3_bucket_website_configuration" in terraform or re.search(r"\bwebsite\s*{", terraform):
+        failures.append("S3 website hosting is not allowed")
+    public_principal_patterns = (
+        re.compile(r'"Principal"\s*:\s*"\*"'),
+        re.compile(r'"Principal"\s*:\s*{\s*"AWS"\s*:\s*"\*"'),
+        re.compile(r'principals?\s*{[^}]*identifiers\s*=\s*\[[^\]]*"\*"', re.DOTALL),
+    )
+    if any(pattern.search(terraform) for pattern in public_principal_patterns):
+        failures.append("public S3 bucket policies are not allowed")
+    return failures
+
+
+def _scan_rendered_terraform(rendered: dict[str, str], package_root: Path, manifest: dict[str, Any]) -> None:
+    terraform = "\n".join(content for name, content in sorted(rendered.items()) if name.endswith(".tf"))
+    if not terraform:
+        return
+    failures: list[str] = []
+    if _package_declares_ecs_backend(manifest):
+        failures.extend(_scan_rendered_ecs_terraform(terraform))
+    if _package_declares_s3_private_bucket(manifest):
+        failures.extend(_scan_rendered_s3_terraform(terraform))
     if failures:
         raise ValidationError(f"Terraform static scan failed for {_rel(package_root)}: {'; '.join(failures)}")
 
@@ -519,7 +614,7 @@ def validate_repo() -> None:
             schema = _validate_schema_files(package_root)
             _validate_intents(package_root, schema, manifest)
             rendered = _render_templates(package_root, manifest)
-            _scan_rendered_terraform(rendered, package_root)
+            _scan_rendered_terraform(rendered, package_root, manifest)
             _validate_deterministic_archive(package_root, files)
         if not temp_path.exists():
             raise ValidationError("Temporary validation directory was unexpectedly removed")
@@ -574,7 +669,16 @@ def run_self_tests() -> None:
         "OpenTofu support with non-Terraform template language was not rejected",
     )
 
-    unsafe_snippets = [
+    ecs_manifest = {
+        "package": {"name": "aws-private-ecs-backend"},
+        "families": [{"id": "aws-private-ecs-backend"}],
+    }
+    s3_manifest = {
+        "package": {"name": "aws-s3-private-bucket"},
+        "families": [{"id": "aws-s3-private-bucket"}],
+    }
+
+    unsafe_ecs_snippets = [
         {"ecs.tf": 'resource "aws_ecs_service" "service" { assign_public_ip = true }'},
         {"network.tf": 'variable "public_subnet_ids" { type = list(string) }'},
         {"alb.tf": 'resource "aws_lb" "service" { internal = false }'},
@@ -585,8 +689,70 @@ resource "aws_security_group_rule" "ecs_public_ingress" {
 }
 '''},
     ]
-    for snippet in unsafe_snippets:
-        expect_error(lambda snippet=snippet: _scan_rendered_terraform(snippet, REPO_ROOT), "unsafe Terraform was not rejected")
+    for snippet in unsafe_ecs_snippets:
+        expect_error(
+            lambda snippet=snippet: _scan_rendered_terraform(snippet, REPO_ROOT, ecs_manifest),
+            "unsafe ECS Terraform was not rejected",
+        )
+
+    unsafe_s3_snippets = [
+        {"s3.tf": 'resource "aws_s3_bucket" "this" {}'},
+        {"s3.tf": 'resource "aws_s3_bucket_acl" "public" { acl = "public-read" }'},
+        {
+            "s3.tf": '''
+resource "aws_s3_bucket_public_access_block" "this" {
+  block_public_acls = true
+  block_public_policy = true
+  ignore_public_acls = true
+  restrict_public_buckets = true
+}
+
+variable "block_public_access" {
+  validation {
+    condition = var.block_public_access == true
+  }
+}
+''',
+        },
+        {
+            "s3.tf": '''
+resource "aws_s3_bucket_public_access_block" "this" {
+  block_public_acls = true
+  block_public_policy = true
+  ignore_public_acls = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {}
+
+data "aws_iam_policy_document" "public" {
+  statement {
+    principals {
+      type = "AWS"
+      identifiers = ["*"]
+    }
+  }
+}
+
+variable "block_public_access" {
+  validation {
+    condition = var.block_public_access == true
+  }
+}
+
+variable "encryption_enabled" {
+  validation {
+    condition = var.encryption_enabled == true
+  }
+}
+''',
+        },
+    ]
+    for snippet in unsafe_s3_snippets:
+        expect_error(
+            lambda snippet=snippet: _scan_rendered_terraform(snippet, REPO_ROOT, s3_manifest),
+            "unsafe S3 Terraform was not rejected",
+        )
 
     with tempfile.TemporaryDirectory(prefix="clovaryn-validator-self-test-") as temp_dir:
         package_root = Path(temp_dir) / "package"

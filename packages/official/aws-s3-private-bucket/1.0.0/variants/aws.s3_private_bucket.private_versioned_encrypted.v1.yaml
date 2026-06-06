@@ -1,0 +1,20 @@
+id: private-versioned-encrypted
+family_id: aws-s3-private-bucket
+provider: aws
+exposure: private
+template_dir: templates/terraform
+template_language: terraform
+supported_iac_targets:
+  - terraform
+  - opentofu
+description: Private S3 bucket with ownership controls, public access block, versioning, and server-side encryption.
+required_resources:
+  - aws_s3_bucket
+  - aws_s3_bucket_ownership_controls
+  - aws_s3_bucket_public_access_block
+  - aws_s3_bucket_versioning
+  - aws_s3_bucket_server_side_encryption_configuration
+required_rules:
+  - aws.s3.private_bucket.block_public_access
+  - aws.s3.private_bucket.encryption_required
+

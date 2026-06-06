@@ -1,0 +1,39 @@
+variable "aws_region" {
+  type = string
+}
+
+variable "bucket_name" {
+  type = string
+}
+
+variable "versioning_enabled" {
+  type = bool
+}
+
+variable "encryption_enabled" {
+  type = bool
+
+  validation {
+    condition     = var.encryption_enabled == true
+    error_message = "This package requires server-side encryption to remain enabled."
+  }
+}
+
+variable "block_public_access" {
+  type = bool
+
+  validation {
+    condition     = var.block_public_access == true
+    error_message = "This package requires S3 public access block to remain enabled."
+  }
+}
+
+variable "force_destroy" {
+  type = bool
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
+

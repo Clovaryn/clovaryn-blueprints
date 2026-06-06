@@ -1,0 +1,10 @@
+id: aws-s3-private-bucket
+provider: aws
+display_name: AWS S3 Private Bucket
+description: AWS S3 private bucket architecture family for safe object storage.
+intent: storage_only
+provided_capabilities:
+  - object_storage
+supported_exposures:
+  - private
+

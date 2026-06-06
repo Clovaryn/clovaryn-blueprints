@@ -1,0 +1,39 @@
+[package]
+namespace = "clovaryn"
+name = "aws-s3-private-bucket"
+version = "1.0.0"
+display_name = "AWS S3 Private Bucket"
+provider = "aws"
+description = "Private AWS S3 bucket with public access blocked, ownership controls, versioning, and server-side encryption."
+
+[compatibility]
+schema = "clovaryn.package.v1"
+compiler_min_version = "0.1.0"
+
+[[families]]
+id = "aws-s3-private-bucket"
+description = "AWS S3 private bucket architecture family for object storage."
+
+[[variants]]
+id = "private-versioned-encrypted"
+family_id = "aws-s3-private-bucket"
+provider = "aws"
+exposure = "private"
+template_dir = "templates/terraform"
+template_language = "terraform"
+supported_iac_targets = ["terraform", "opentofu"]
+
+[[rules]]
+id = "aws.s3.private_bucket.block_public_access"
+severity = "blocker"
+description = "Private S3 buckets must block public access."
+
+[[rules]]
+id = "aws.s3.private_bucket.encryption_required"
+severity = "blocker"
+description = "Private S3 buckets must enable server-side encryption."
+
+[bindings]
+default_family_id = "aws-s3-private-bucket"
+default_variant_id = "private-versioned-encrypted"
+
