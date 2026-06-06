@@ -1,0 +1,11 @@
+rules:
+  - id: aws.s3.private_bucket.required_resources
+    severity: blocker
+    description: Private S3 bucket packages must include the required bucket, ownership, versioning, encryption, and public access block resources.
+    checks:
+      - aws_s3_bucket must be present
+      - aws_s3_bucket_ownership_controls must be present
+      - aws_s3_bucket_public_access_block must be present
+      - aws_s3_bucket_versioning must be present
+      - aws_s3_bucket_server_side_encryption_configuration must be present
+

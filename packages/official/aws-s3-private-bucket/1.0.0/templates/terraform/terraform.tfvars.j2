@@ -1,0 +1,8 @@
+aws_region = {{ terraform.aws_region | hcl }}
+bucket_name = {{ terraform.variables.bucket_name.default | hcl }}
+versioning_enabled = {{ terraform.variables.versioning_enabled.default | hcl }}
+encryption_enabled = {{ terraform.variables.encryption_enabled.default | hcl }}
+block_public_access = {{ terraform.variables.block_public_access.default | hcl }}
+force_destroy = {{ terraform.variables.force_destroy.default | hcl }}
+tags = {{ terraform.variables.tags.default | hcl }}
+
